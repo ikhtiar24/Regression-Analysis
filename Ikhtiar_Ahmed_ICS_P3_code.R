@@ -1,0 +1,120 @@
+library(ggplot2)
+library(ggpubr)
+library(car)
+
+
+# read the file
+df <- read.csv(file = 'D:\\Study\\TU Dortmund\\ICS\\Summer 2023\\ICS 2023\\3rd Report\\Bikedata.csv', sep = ",")
+
+#1 --- Descriptive statistics
+
+descriptive_stats <- as.data.frame(summary(df))
+descriptive_stats
+
+
+#1 ---- scatter plot
+
+scatterplots <- lapply(names(df), function(x) {
+  ggplot(df, aes( y= `log.Rented.Bike.Count`, x = .data[[x]])) + 
+    theme(plot.title = element_text(hjust = 0.5)) +
+    ylab("Rented in each hour")+
+    xlab(x)+
+    geom_point()
+})
+
+scat <- ggarrange(scatterplots[[1]], scatterplots[[2]], scatterplots[[3]],scatterplots[[4]],scatterplots[[5]],scatterplots[[6]],
+                    scatterplots[[7]],scatterplots[[8]],scatterplots[[9]],
+                    ncol = 3, nrow = 3)
+scat
+
+
+
+#boxplot for categorical variable
+
+box1 <- ggplot(df, aes(x=Seasons, y=log.Rented.Bike.Count, fill=Seasons))+
+  geom_boxplot() + xlab("Seasons") + ylab("Rented in each hour") + labs(fill = "Seasons")+
+  theme(legend.position = "none", axis.text = element_text(size = 18),
+        axis.title = element_text(size = 18)) 
+
+box1
+
+
+box2 <- ggplot(df, aes(x=Holiday, y=log.Rented.Bike.Count, fill=Holiday))+
+  geom_boxplot() + xlab("Holiday") + ylab("Rented in each hour") + labs(fill = "Holiday")+
+  theme(legend.position = "none", axis.text = element_text(size = 18),
+        axis.title = element_text(size = 18)) 
+box2
+
+
+
+#2 ---- linear regression model
+
+model_rented <- lm(log.Rented.Bike.Count ~ ., data = df)
+summary(model_rented)
+AIC(model_rented)
+BIC(model_rented)
+
+#3------- suitable subset of explanatory
+
+data_model <- df
+data_model$log.Rented.Bike.Count <- NULL
+
+mod_headers <- names(data_model[1:ncol(data_model)])
+
+
+models <- list()
+
+k <- 1
+for (i in 1:length(mod_headers)) {
+  tab <- combn(mod_headers, i)
+  tab
+  for(j in 1:ncol(tab)) {
+    mod_tab_new <- c(tab[, j], "log.Rented.Bike.Count")
+    models[[k]]  <- lm(log.Rented.Bike.Count ~ ., data = df[mod_tab_new])
+    k <- k + 1
+  }
+}
+
+
+# Best model by AIC
+model_AIC <- models[[which.min(sapply(models, AIC))]] 
+summary(model_AIC )
+AIC(models[[which.min(sapply(models, AIC))]]) 
+
+
+# Best model by BIC
+model_BIC <- models[[which.min(sapply(models, BIC))]] 
+summary(model_BIC )
+BIC(models[[which.min(sapply(models, BIC))]]) 
+
+#confidence interval
+confidence_int = confint(model_BIC, level=0.95)
+confidence_int
+
+
+#4 ----- model evaluation.
+
+result <- rstandard(model_BIC)
+result
+
+ggplot(data = model_BIC, aes(sample = rstandard(model_BIC))) + 
+  geom_qq(color = "black") +
+  geom_qq_line(color = "blue") +
+  labs(y = "Standardized Residuals", x = "Theoratical Quantiles", element_text()) +
+  theme(axis.text = element_text(size = 15), axis.title = element_text(size = 17))  
+
+
+#residual vs fitted values
+ggplot(df, aes(y = result, x = model_BIC$fitted.values)) +
+  theme(axis.text = element_text(size = 15), axis.title = element_text(size = 17), title = element_text(size = 15)) +
+  geom_point() + ylab("Standardized Residuals") + xlab("Fitted values")+
+  
+  geom_abline(intercept = 0, slope = 0, col="blue")
+
+
+# calculate the VIF for each predictor variable in the model
+vif(model_rented)
+
+
+
+
